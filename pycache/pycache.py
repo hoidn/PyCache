@@ -68,7 +68,6 @@ class MemoCache:
     def insert(self, value, *args, **kwargs):
         self.cache[self._get_key(*args, **kwargs)] = value
 
-
 class DependencyWalk(ast.NodeVisitor):
     """
     Walk AST to find code and global variable dependencies.
@@ -195,39 +194,62 @@ def wrap_call(call_node, wrapper):
     call_node.func = ast.fix_missing_locations(subtree)
     return call_node
 
-# TODO: debug
-import copy
-class WrapModule(ast.NodeTransformer):
-    def __init__(self, wrapper):
-        self.wrapper = wrapper
+#class WrapModule(ast.NodeVisitor):
+#    """
+#    Modify AST by "wrapping" function definitions.
+#    """
+#    def __init__(self, wrapper):
+#        self.wrapper = wrapper
+#
+#    def visit_Module_or_FunctionDef(self, node):
+#        new_body = []
+#        for i, bnode in enumerate(node.body):
+#            new_body.append(bnode)
+#            if type(bnode) == ast.FunctionDef:
+#                new_body.append(
+#                    ast.fix_missing_locations(
+#                        ast.Assign(targets=[ast.Name(id = bnode.name, ctx = ast.Store())],
+#                               value = ast.Call(
+#                                   func = ast.Name(id = self.wrapper.__name__, ctx = ast.Load()),
+#                                   args = [ast.Name(id = bnode.name, ctx = ast.Load())],
+#                                   keywords = []
+#                               )
+##                               ,
+##                               args = [ast.Name(id = bnode.name, ctx = ast.Load())],
+##                               keywords = []
+#                               )))
+#        node.body = new_body
+#        self.generic_visit(node)
+#        #return node
+#
+#    def visit_Module(self, node):
+#        return self.visit_Module_or_FunctionDef(node)
+#
+#    def visit_FunctionDef(self, node):
+#        return self.visit_Module_or_FunctionDef(node)
 
-    def visit_Module_or_FunctionDef(self, node):
-        node = copy.deepcopy(node)
-        new_body = []
-        for i, node in enumerate(node.body):
-            new_body.append(node)
-            if type(node) == ast.FunctionDef:
-                print ('wrapping a funtion')
-                new_body.append(
-                    ast.fix_missing_locations(
-                        ast.Assign(targets=[ast.Name(id = node.name)],
-                               value = ast.Call(
-                                   func = ast.Name(id = self.wrapper.__name__, ctx = ast.Load()),
-                                   args = [ast.Name(id = node.name)],
-                                   keywords = []
-                               ),
-                               args = [ast.Name(id = node.name)],
-                               keywords = []
-                               )))
-        node.body = new_body
-        self.generic_visit(node)
-        return node
+class WrapModule(ast.NodeVisitor):
+    """
+    Modify function definitions by decorating them with a wrapper function.
+    """
+    def __init__(self, wrapper_name):
+        """
+        wrapper_name must be a string corresponding to the name of a function
+        defined in pycache.
+        """
+        self.wrapper = wrapper_name
 
     def visit_Module(self, node):
-        return self.visit_Module_or_FunctionDef(node)
+        node.body.insert(0, ast.Import(names=[ast.alias(name='pycache', asname=None)]))
+        # "from . import pycache"
+        #node.body.insert(0, ast.ImportFrom(module=None, names=[ast.alias(name='pycache', asname=None)], level = 1))
+        ast.fix_missing_locations(node)
+        self.generic_visit(node)
 
     def visit_FunctionDef(self, node):
-        return self.visit_Module_or_FunctionDef(node)
+        node.decorator_list.append(ast.parse(self.wrapper).body[0].value)
+        ast.fix_missing_locations(node)
+        self.generic_visit(node)
 
 class MemoStack:
     def __init__(self):
@@ -247,8 +269,18 @@ def simplememo(f):
     """Basic memoization wrapper"""
     cache = {}
     def new_f(*args):
-#        print(args)
-#        print(f)
+        if args not in cache:
+            cache[args] = f(*args)
+        return cache[args]
+    return new_f
+
+def get_globals():
+    return globals()
+
+def memoizer(f):
+    """ Main memoization wrapper"""
+    cache = {}
+    def new_f(*args):
         if args not in cache:
             cache[args] = f(*args)
         return cache[args]
@@ -259,10 +291,12 @@ def eval_node(node, context = {}):
     code = compile(expr, '', 'eval')
     return eval(code, globals(), context)
 
-def exec_node(node, context = {}):
+def exec_node(node, glob = None, context = {}):
     """expects a Module node"""
     code = compile(node, '', 'exec')
-    return exec(code, globals(), context)
+    if glob is None:
+        glob  = globals()
+    return exec(code, glob, context)
 
 
 def p_ast(obj):
