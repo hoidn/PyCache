@@ -339,13 +339,13 @@ def memoizer(f):
     state = {'memocache': None}
     def new_f(*args, **kwargs):
         cache = state['memocache']
-        # TODO: compute the tree in parent scope to avoid wasteful repeated
+        # TODO: parse the tree in parent scope to avoid wasteful repeated
         # computation
         tree = decode_ast(new_f._source).body[0]
         if cache is None:
             frame = inspect.currentframe().f_back
             cache = state['memocache'] = MemoCache(tree, frame = frame)
-        else:
+        elif caching_strategy == 'correctness':
             cache.update_code_and_global_deps(tree)
 
         try:
