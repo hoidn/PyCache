@@ -15,9 +15,9 @@ Consider the naive version of a recursive function that computes the Fibonacci n
 ```python
 # tests/tests.py
 def fib(n):
-    if n <= 1:
+	if n <= 1:
 	return 1
-    return fib(n - 1) + fib(n - 2)
+	return fib(n - 1) + fib(n - 2)
 ```
 It will run in exponential time, but we can use pycache to automatically transform it into a memoized, linear time version. From the REPL, or in a module:
 ```python
@@ -32,13 +32,13 @@ By default, pycache resolves a function's code dependencies at runtime and inval
 ```python
 # tests/tests.py
 def foo(x):
-    return bar(x)
+	return bar(x)
 
 def bar(z):
-    return 2 * z
+	return 2 * z
 
 def bar2(z):
-    return 3 * z
+	return 3 * z
 ```
 Again from the shell:
 ```python
@@ -58,8 +58,8 @@ Variable lookup and code-based cache invalidation are necessary to obtain correc
 ```python
 @pycache.memoizer(memo_args = True, memo_vars = False, memo_code = False)
 def fib2(n):
-    if n <= 1:
-        return 1
-    return fib2(n - 1) + fib2(n - 2)
+	if n <= 1:
+		return 1
+	return fib2(n - 1) + fib2(n - 2)
 ```
 The user can perform this type of optimization whenever desired.
