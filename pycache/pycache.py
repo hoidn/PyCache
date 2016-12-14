@@ -1,4 +1,8 @@
+import xxhash
+import pickle
 import dill
+import hashlib
+import ujson
 import sys
 import pdb
 import ast
@@ -193,16 +197,31 @@ def test_eval_attribute():
     assert attribute_path(node) == ['other', 'third', 'bazbar']
 
 
+def serialize(obj):
+    """
+    Try fast (but limited) serialization on non-callable objects.
+    If it fails, try pickle and then finally dill.
+    """
+    if callable(obj):
+        return dill.dumps(obj)
+    try:
+        return ujson.dumps(obj)
+    except:
+        try:
+            return pickle.dumps(obj)
+        except:
+            return dill.dumps(obj)
+
+def obj_digest(to_digest):
+    return xxhash.xxh64(serialize(to_digest)).hexdigest()
+
 def hash_obj(obj):
     u"""
     return a hash of any python object
     """
-    import hashlib
     import operator
     from functools import reduce
     import numpy as np
-    def obj_digest(to_digest):
-        return hashlib.sha1(dill.dumps(to_digest)).hexdigest()
 
     def iter_digest(to_digest):
         return obj_digest(reduce(operator.add, list(map(hash_obj, to_digest))))
@@ -260,7 +279,6 @@ class WrapModule(ast.NodeVisitor):
                                    args = [ast.Name(id = bnode.name, ctx = ast.Load())],
                                    keywords = []
                                ))))
-                print(bnode)
                 new_body.append(
                     ast.fix_missing_locations(
                         ast.Assign(targets=[ast.Attribute(value = ast.Name(id = bnode.name, ctx = ast.Load()),

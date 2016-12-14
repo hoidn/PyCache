@@ -22,7 +22,7 @@ class Loader(SourceFileLoader):
     def exec_module(self, module):
         source = inspect.getsource(module)
         tree = ast.parse(source)
-        transformer = pycache.WrapModule('pycache.simplememo')
+        transformer = pycache.WrapModule('pycache.memoizer')
         transformer.visit(tree)
         code = compile(tree, '', 'exec')
         exec(code, module.__dict__, module.__dict__)
