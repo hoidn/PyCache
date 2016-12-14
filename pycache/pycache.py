@@ -12,7 +12,7 @@ import logging
 logging.basicConfig(filename = 'pycache.log', level = logging.DEBUG)
 
 # Can equal 'performance' or 'correctness'
-caching_strategy = 'performance'
+caching_strategy = 'correctness'
 
 
 class MemoCache:
@@ -86,24 +86,26 @@ class DependencyWalk(ast.NodeVisitor):
         try:
             if isinstance(self.lookup_obj(name_path), FunctionType):
             # Check if function is in a different module
+                raw_source = self.lookup_obj(name_path)._source
+                source_tree = decode_ast(raw_source)
                 if len(name_path) > 1:
-                    start_source = decode_ast(self.lookup_obj(name_path)._source)
-                    start_tree = ast.parse(start_source)
+                    start_tree = ast.parse(source_tree)
                     new_visitor = DependencyWalk(self.module_prefix + name_path[:-1],
                                                  global_env = self.global_env)
                     new_visitor.visit(start_tree)
                     self.code_hashes |= new_visitor.code_hashes
                     self.globals |= new_visitor.globals
                 else:
-                    self.code_hashes.add(hash_obj(self.lookup_obj(name_path)))
+                    self.code_hashes.add(obj_digest(raw_source))
             # If this is a method call the best we can do is just hash the object.
             # If we want to track object dependencies, this has to be
             # done by modifying the class.
             elif isinstance(self.lookup_obj(name_path), MethodType):
-                self.code_hashes.add(hash_obj(self.lookup_obj(name_path[:-1])))
+                self.code_hashes.add(raw_source)
             else:
                 logging.debug("Non-function or method node: %s" % str(node))
         except (NameError, SyntaxError) as e:
+            raise
             # TODO: track down the source of syntax errors
             # We expect this exception raised on every call involving an object
             # in an unreachable scope (i.e. lexical closures and class instance
