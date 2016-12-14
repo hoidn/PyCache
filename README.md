@@ -16,7 +16,7 @@ Consider the naive version of a recursive function that computes the Fibonacci n
 # tests/tests.py
 def fib(n):
 	if n <= 1:
-	return 1
+		return 1
 	return fib(n - 1) + fib(n - 2)
 ```
 It will run in exponential time, but we can use pycache to automatically transform it into a memoized, linear time version. From the REPL, or in a module:
