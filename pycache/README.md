@@ -9,3 +9,5 @@ https://docs.google.com/a/uw.edu/document/d/1CnAfqsJpNaZ3ftw2EbG9nV_ofRsp9LGy3Va
 
 5.4:
 https://docs.google.com/a/uw.edu/document/d/1VirNg7QupR3X8ZTWfYDRsLCjBV7cgi9_Uh0mDs2Ntsc/edit?usp=sharing
+
+Tutorial: to be completed
