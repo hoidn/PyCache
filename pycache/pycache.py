@@ -1,7 +1,6 @@
 import xxhash
 import pickle
 import dill
-import hashlib
 import ujson
 import sys
 import pdb
@@ -20,14 +19,14 @@ class MemoCache:
     """
     Provides an interface to the memoization cache for one function.
     """
-    def __init__(self, callnode, frame = None, vars = True, code = True):
+    def __init__(self, callnode, vars = True, code = True, global_env = {}):
         # TODO: figure out namespace issues
-        self.frame = frame
         self.vars = vars
         self.code = code
         self.cache = {}
+        self.global_env = global_env
         if self.vars or self.code:
-            deps = DependencyWalk(frame = frame)
+            deps = DependencyWalk(global_env = global_env)
             deps.visit(callnode)
             # TODO: insert code here that loads the persistent cache from disk
             self.code_hash = hash_obj(deps.code_hashes)
@@ -36,13 +35,12 @@ class MemoCache:
         # self.file_deps = []
 
     def update_code_and_global_deps(self, callnode):
-        #pdb.set_trace()
         if self.vars or self.code:
-            deps = DependencyWalk(frame = self.frame)
+            deps = DependencyWalk(global_env = self.global_env)
             deps.visit(callnode)
-            print(self.code_hash)
+            # TODO: why does this code hash change over repeated calls with the same arguments?
+            #print(self.code_hash)
             new_code_hash = hash_obj(deps.code_hashes)
-            print(new_code_hash)
             new_global_deps = deps.globals
             # TODO: this will fail if there's a discrepancy between the module prefixes between
             # new_global_deps and self.global_deps
@@ -65,84 +63,36 @@ class MemoCache:
     def insert(self, value, *args, **kwargs):
         self.cache[self._get_key(*args, **kwargs)] = value
 
-#class DependencyWalk(ast.NodeVisitor):
-#    """
-#    Walk AST to find code and global variable dependencies.
-#    """
-#    def __init__(self, module_prefix = []):
-#        self.code_hashes = set()
-#        self.globals = set()
-#        self.module_prefix = module_prefix # list of strings
-#
-#    def lookup_obj(self, name_path, module_prefix = []):
-#        """
-#        Look up an object based on its name and the current module prefix.
-#        """
-#        return lookup_obj(name_path, self.module_prefix)
-#
-#    # TODO: resolve global variable deps
-#
-#    def visit_Call(self, node):
-#        from types import FunctionType, MethodType
-#        name_path = attribute_path(node.func)
-#        try:
-#            if isinstance(self.lookup_obj(name_path), FunctionType):
-#            # Check if function is in a different module
-#                if len(name_path) > 1:
-#                    start_source = inspect.getsource(self.lookup_obj(name_path))
-#                    start_tree = ast.parse(start_source)
-#                    new_visitor = DependencyWalk(self.module_prefix + name_path[:-1])
-#                    new_visitor.visit(start_tree)
-#                    self.code_hashes |= new_visitor.code_hashes
-#                    self.globals |= new_visitor.globals
-#                else:
-#                    self.code_hashes.add(hash_obj(self.lookup_obj(name_path)))
-#            # If this is a method call the best we can do is just hash the object.
-#            # If we want to track object dependencies, this has to be
-#            # done by modifying the class.
-#            elif isinstance(self.lookup_obj(name_path), MethodType):
-#                self.code_hashes.add(hash_obj(self.lookup_obj(name_path[:-1])))
-#            else:
-#                logging.debug("Non-function or method node: %s" % str(node))
-#        except NameError as e:
-#            # We expect this exception raised on every call involving an object
-#            # outside of the current lexical scope.
-#            logging.debug("Callable lookup failed: %s" % e)
-#        # Recursively visit the child nodes
-#        self.generic_visit(node)
-
 class DependencyWalk(ast.NodeVisitor):
     """
     Walk AST to find code and global variable dependencies.
     """
-    def __init__(self, module_prefix = [], frame = None):
-        self.frame = frame
+    def __init__(self, module_prefix = [], global_env = {}):
         self.code_hashes = set()
         self.globals = set()
         self.module_prefix = module_prefix # list of strings
+        self.global_env = global_env
 
-    def lookup_obj(self, name_path, module_prefix = [], frame = None):
+    def lookup_obj(self, name_path, module_prefix = []):
         """
         Look up an object based on its name and the current module prefix.
         """
-        return lookup_obj(name_path, self.module_prefix, frame)
+        return lookup_obj(name_path, self.module_prefix, global_env = self.global_env)
 
     # TODO: resolve global variable deps
-
     def visit_Call(self, node):
         from types import FunctionType, MethodType
         name_path = attribute_path(node.func)
         try:
-            # TODO: fix failing accesses here
-            if isinstance(self.lookup_obj(name_path, frame = self.frame), FunctionType):
+            if isinstance(self.lookup_obj(name_path), FunctionType):
             # Check if function is in a different module
                 if len(name_path) > 1:
                     start_source = decode_ast(self.lookup_obj(name_path)._source)
                     start_tree = ast.parse(start_source)
-                    new_visitor = DependencyWalk(self.module_prefix + name_path[:-1])
+                    new_visitor = DependencyWalk(self.module_prefix + name_path[:-1],
+                                                 global_env = self.global_env)
                     new_visitor.visit(start_tree)
                     self.code_hashes |= new_visitor.code_hashes
-                    print(self.code_hashes)
                     self.globals |= new_visitor.globals
                 else:
                     self.code_hashes.add(hash_obj(self.lookup_obj(name_path)))
@@ -153,29 +103,31 @@ class DependencyWalk(ast.NodeVisitor):
                 self.code_hashes.add(hash_obj(self.lookup_obj(name_path[:-1])))
             else:
                 logging.debug("Non-function or method node: %s" % str(node))
-        except NameError as e:
+        except (NameError, SyntaxError) as e:
+            # TODO: track down the source of syntax errors
             # We expect this exception raised on every call involving an object
-            # outside of the current lexical scope.
+            # in an unreachable scope (i.e. lexical closures and class instance
+            # variables)
             logging.debug("Callable lookup failed: %s" % e)
         # Recursively visit the child nodes
         self.generic_visit(node)
 
     def visit_FunctionDef(self, node):
         name = node.name
-        hash = hash_obj(self.lookup_obj([name], frame = self.frame))
+        hash = hash_obj(self.lookup_obj([name]))
         # To avoid infinite recursion, make sure we haven't already seen this
         # function
         if hash not in self.code_hashes:
             self.code_hashes.add(hash)
             self.generic_visit(node)
 
-def lookup_obj(name_path, module_prefix = [], frame = None):
+def lookup_obj(name_path, module_prefix = [], global_env = {}):
     """
     Look up an object based on its name and the current module prefix.
     """
     ref = '.'.join(module_prefix + name_path)
-    if frame:
-        return eval(ref, frame.f_globals, frame.f_locals)
+    if global_env:
+        return eval(ref, global_env, global_env)
     else:
         return eval(ref)
 
@@ -384,7 +336,6 @@ class WrapModule(ast.NodeVisitor):
 #                                       keywords = []
 #                                   ))))
 #                else:
-#                    pdb.set_trace()
 #                    new_body.append(
 #                        ast.fix_missing_locations(
 #                            ast.Assign(targets=[ast.Name(id = bnode.name, ctx = ast.Store())],
@@ -399,37 +350,6 @@ class WrapModule(ast.NodeVisitor):
 #                        ast.Assign(targets=[ast.Attribute(value = ast.Name(id = bnode.name, ctx = ast.Load()),
 #                                                          attr = '_source', ctx = ast.Store())],
 #                                   value = ast.Str(s = encode_ast(bnode)))))
-
-#class WrapModule(ast.NodeVisitor):
-#    """
-#    Modify function definitions by decorating them with a wrapper function.
-#    """
-#    def __init__(self, wrapper_name):
-#        """
-#        wrapper_name must be a string corresponding to the name of a function
-#        defined in pycache.
-#        """
-#        self.wrapper = wrapper_name
-#        self._parent = None
-#
-#    def generic_visit(self, node):
-#        super(WrapModule, self).generic_visit(node)
-#        self._parent = node
-#
-#    def visit_Module(self, node):
-#        node.body.insert(0, ast.Import(names=[ast.alias(name='pycache', asname=None)]))
-#        # "from . import pycache"
-#        #node.body.insert(0, ast.ImportFrom(module=None, names=[ast.alias(name='pycache', asname=None)], level = 1))
-#        ast.fix_missing_locations(node)
-#        self.generic_visit(node)
-#
-#    def visit_FunctionDef(self, node):
-#        #print(astor.dump(inspect.getsource(eval(node.name))))
-##        print(astunparse.unparse(node))
-##        print(astor.dump(self._parent))
-#        node.decorator_list.append(ast.parse(self.wrapper).body[0].value)
-#        ast.fix_missing_locations(node)
-#        self.generic_visit(node)
 
 class MemoStack:
     def __init__(self):
@@ -462,19 +382,14 @@ def memoizer(memo_args = True, memo_vars = True, memo_code = True):
             cache = state['memocache']
             # TODO: parse the tree in parent scope to avoid wasteful repeated
             # computation
-            #pdb.set_trace()
-            #tree = decode_ast(new_f._source)#.body[0]
             tree = ast.Module(body = decode_ast(new_f._source).body)
             if cache is None:
-                # TODO: in general, this breaks if the function is called from
-                # a different scope from that in which it's defined
-                frame = inspect.currentframe().f_back
-                cache = state['memocache'] = MemoCache(tree, frame = frame,
+                global_env = f.__globals__
+                cache = state['memocache'] = MemoCache(tree, global_env = global_env,
                                                        vars = memo_vars, code = memo_code)
             elif caching_strategy == 'correctness':
                 cache.update_code_and_global_deps(tree)
             try:
-                #pdb.set_trace()
                 if memo_args: # Include function arguments in cache key
                     return cache.lookup(*args, **kwargs)
                 else: # Exclude them
