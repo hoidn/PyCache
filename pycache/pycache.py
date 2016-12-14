@@ -19,37 +19,45 @@ caching_strategy = 'performance'
 class MemoCache:
     """
     Provides an interface to the memoization cache for one function.
-    
-    This class is a singleton keyed using identity of the memoized function.
     """
-    def __init__(self, callnode, frame = None):
+    def __init__(self, callnode, frame = None, vars = True, code = True):
         # TODO: figure out namespace issues
-        deps = DependencyWalk(frame = frame)
         self.frame = frame
-        deps.visit(callnode)
-        # TODO: insert code here that loads the persistent cache from disk
+        self.vars = vars
+        self.code = code
         self.cache = {}
-        self.code_hash = hash_obj(deps.code_hashes)
-        self.global_deps = deps.globals
+        if self.vars or self.code:
+            deps = DependencyWalk(frame = frame)
+            deps.visit(callnode)
+            # TODO: insert code here that loads the persistent cache from disk
+            self.code_hash = hash_obj(deps.code_hashes)
+            self.global_deps = deps.globals
         # TODO: add a mechanism for including and updating file dependencies
-        self.file_deps = []
+        # self.file_deps = []
 
     def update_code_and_global_deps(self, callnode):
-        deps = DependencyWalk(self.frame)
-        deps.visit(callnode)
-        new_code_hash = hash_obj(deps.code_hashes)
-        new_global_deps = deps.globals
-        # TODO: this will fail if there's a discrepancy between the module prefixes between
-        # new_global_deps and self.global_deps
-        if new_code_hash != self.code_hash or new_global_deps != self.global_deps:
-            self.cache = {}
-            self.code_hash = new_code_hash
-            self.global_deps = new_global_deps
+        #pdb.set_trace()
+        if self.vars or self.code:
+            deps = DependencyWalk(frame = self.frame)
+            deps.visit(callnode)
+            print(self.code_hash)
+            new_code_hash = hash_obj(deps.code_hashes)
+            print(new_code_hash)
+            new_global_deps = deps.globals
+            # TODO: this will fail if there's a discrepancy between the module prefixes between
+            # new_global_deps and self.global_deps
+            if new_code_hash != self.code_hash or new_global_deps != self.global_deps:
+                self.cache = {}
+                self.code_hash = new_code_hash
+                self.global_deps = new_global_deps
 
     def _get_key(self, *args, **kwargs):
         arghash = hash_obj((args, kwargs))
-        varhash = hash_obj([var for var in self.global_deps])
-        return hash_obj(arghash + varhash)
+        if self.vars:
+            varhash = hash_obj([var for var in self.global_deps])
+            return hash_obj(arghash + varhash)
+        else:
+            return hash_obj(arghash)
 
     def lookup(self, *args, **kwargs):
         return self.cache[self._get_key(*args, **kwargs)]
@@ -125,7 +133,8 @@ class DependencyWalk(ast.NodeVisitor):
         from types import FunctionType, MethodType
         name_path = attribute_path(node.func)
         try:
-            if isinstance(self.lookup_obj(name_path), FunctionType):
+            # TODO: fix failing accesses here
+            if isinstance(self.lookup_obj(name_path, frame = self.frame), FunctionType):
             # Check if function is in a different module
                 if len(name_path) > 1:
                     start_source = decode_ast(self.lookup_obj(name_path)._source)
@@ -133,6 +142,7 @@ class DependencyWalk(ast.NodeVisitor):
                     new_visitor = DependencyWalk(self.module_prefix + name_path[:-1])
                     new_visitor.visit(start_tree)
                     self.code_hashes |= new_visitor.code_hashes
+                    print(self.code_hashes)
                     self.globals |= new_visitor.globals
                 else:
                     self.code_hashes.add(hash_obj(self.lookup_obj(name_path)))
@@ -169,9 +179,31 @@ def lookup_obj(name_path, module_prefix = [], frame = None):
     else:
         return eval(ref)
 
+
+def simplememo(f):
+    """Basic memoization wrapper"""
+    cache = {}
+    def new_f(*args):
+        if args not in cache:
+            cache[args] = f(*args)
+        return cache[args]
+    return new_f
+
+#def simplehashmemo(f):
+#    """Basic memoization that uses object hash-based keys"""
+#    cache = {}
+#    def new_f(*args):
+#        if args not in cache:
+#            cache[hash_obj(args)] = f(*args)
+#        return cache[hash_obj(args)]
+#    return new_f
+
+
 def encode_ast(tree):
     return dill.dumps(tree).decode('cp437')
 
+# TODO: why doesn't this improve runtime?
+#@simplehashmemo
 def decode_ast(string):
     return dill.loads(string.encode('cp437'))
 
@@ -258,6 +290,27 @@ def wrap_call(call_node, wrapper):
     call_node.func = ast.fix_missing_locations(subtree)
     return call_node
 
+#def pop_from_decorator_list(defnode, search_str):
+#    """
+#    Search a function definition node for a decorator whose name matches the
+#    given string. If a match is found, the corresponding node is removed from
+#    the decorator list and returned.
+#    """
+
+def search_decorator_list(defnode):
+    """
+    Return true if at least one of a FunctionDef node's decorators is a
+    function defined in pycache.
+    """
+    for node in defnode.decorator_list:
+        # TODO: make this prettier
+        if type(node) == ast.Call and type(node.func) == ast.Attribute:
+            if 'pycache' == node.func.value.id:
+                return True
+    return False
+
+#def parse_functiondef(defnode):
+#    decorator_list=[Call(func=Name(id='wr'), args=[Str(s='hello'), Str(s='world')], keywords=[])]
 class WrapModule(ast.NodeVisitor):
     """
     Modify AST by "wrapping" function definitions.
@@ -270,20 +323,24 @@ class WrapModule(ast.NodeVisitor):
         for i, bnode in enumerate(node.body):
             new_body.append(bnode)
             if type(bnode) == ast.FunctionDef:
-                # Rebind the function to its wrapped version
-                new_body.append(
-                    ast.fix_missing_locations(
-                        ast.Assign(targets=[ast.Name(id = bnode.name, ctx = ast.Store())],
-                               value = ast.Call(
-                                   func = ast.parse(self.wrapper).body[0].value,
-                                   args = [ast.Name(id = bnode.name, ctx = ast.Load())],
-                                   keywords = []
-                               ))))
+                # Rebind the function to its wrapped version if the user hasn't explicitly
+                # annotated it.
+                if not search_decorator_list(bnode):
+                    new_body.append(
+                        ast.fix_missing_locations(
+                            ast.Assign(targets=[ast.Name(id = bnode.name, ctx = ast.Store())],
+                                   value = ast.Call(
+                                       func = ast.parse(self.wrapper).body[0].value,
+                                       args = [ast.Name(id = bnode.name, ctx = ast.Load())],
+                                       keywords = []
+                                   ))))
+                # TODO cleanup
                 new_body.append(
                     ast.fix_missing_locations(
                         ast.Assign(targets=[ast.Attribute(value = ast.Name(id = bnode.name, ctx = ast.Load()),
                                                           attr = '_source', ctx = ast.Store())],
                                    value = ast.Str(s = encode_ast(bnode)))))
+
         node.body = new_body
         self.generic_visit(node)
 
@@ -294,6 +351,54 @@ class WrapModule(ast.NodeVisitor):
 
     def visit_FunctionDef(self, node):
         return self.visit_Module_or_FunctionDef(node)
+
+#def pop_from_decorator_list(defnode):
+#    """
+#    Search a function definition node for a decorator whose name matches the
+#    given string. If a match is found, the corresponding node is removed from
+#    the decorator list and returned.
+#    """
+#    for node in defnode.decorator_list:
+#        if type(node) == ast.Call:
+#            if 'pycache' in node.func.id:
+#                defnode.decorator_list.remove(node)
+#                print(astor.dump(node))
+#                return node
+#    return None
+#    def visit_Module_or_FunctionDef(self, node):
+#        new_body = []
+#        for i, bnode in enumerate(node.body):
+#            new_body.append(bnode)
+#            if type(bnode) == ast.FunctionDef:
+#                # Rebind the function to its wrapped version if the user hasn't explicitly
+#                # annotated it.
+#                print(astor.dump(bnode))
+#                decorator = pop_from_decorator_list(bnode)
+#                if decorator is None:
+#                    new_body.append(
+#                        ast.fix_missing_locations(
+#                            ast.Assign(targets=[ast.Name(id = bnode.name, ctx = ast.Store())],
+#                                   value = ast.Call(
+#                                       func = ast.parse(self.wrapper).body[0].value,
+#                                       args = [ast.Name(id = bnode.name, ctx = ast.Load())],
+#                                       keywords = []
+#                                   ))))
+#                else:
+#                    pdb.set_trace()
+#                    new_body.append(
+#                        ast.fix_missing_locations(
+#                            ast.Assign(targets=[ast.Name(id = bnode.name, ctx = ast.Store())],
+#                                   value = ast.Call(
+#                                       func = decorator,
+#                                       #func = ast.parse(self.wrapper).body[0].value,
+#                                       args = [ast.Name(id = bnode.name, ctx = ast.Load())],
+#                                       keywords = []
+#                                   ))))
+#                new_body.append(
+#                    ast.fix_missing_locations(
+#                        ast.Assign(targets=[ast.Attribute(value = ast.Name(id = bnode.name, ctx = ast.Load()),
+#                                                          attr = '_source', ctx = ast.Store())],
+#                                   value = ast.Str(s = encode_ast(bnode)))))
 
 #class WrapModule(ast.NodeVisitor):
 #    """
@@ -340,40 +445,59 @@ class MemoStack:
         return self.stack.pop()
 
 
-def simplememo(f):
-    """Basic memoization wrapper"""
-    cache = {}
-    def new_f(*args):
-        if args not in cache:
-            cache[args] = f(*args)
-        return cache[args]
-    return new_f
 
 def get_globals():
     return globals()
 
-def memoizer(f):
-    """ Main memoization wrapper"""
-    state = {'memocache': None}
-    def new_f(*args, **kwargs):
-        cache = state['memocache']
-        # TODO: parse the tree in parent scope to avoid wasteful repeated
-        # computation
-        tree = decode_ast(new_f._source).body[0]
-        if cache is None:
-            frame = inspect.currentframe().f_back
-            cache = state['memocache'] = MemoCache(tree, frame = frame)
-        elif caching_strategy == 'correctness':
-            cache.update_code_and_global_deps(tree)
+def memoizer(memo_args = True, memo_vars = True, memo_code = True):
+    """
+    Generate a memoizing decorator that takes into account zero or more of (1)
+    function arguments, (2) local and global variables, and (3) code
+    dependencies.  If none of these is selected, no memoization is done.
+    """
+    def memoizer(f):
+        """ Main memoization wrapper"""
+        state = {'memocache': None}
+        def new_f(*args, **kwargs):
+            cache = state['memocache']
+            # TODO: parse the tree in parent scope to avoid wasteful repeated
+            # computation
+            #pdb.set_trace()
+            #tree = decode_ast(new_f._source)#.body[0]
+            tree = ast.Module(body = decode_ast(new_f._source).body)
+            if cache is None:
+                # TODO: in general, this breaks if the function is called from
+                # a different scope from that in which it's defined
+                frame = inspect.currentframe().f_back
+                cache = state['memocache'] = MemoCache(tree, frame = frame,
+                                                       vars = memo_vars, code = memo_code)
+            elif caching_strategy == 'correctness':
+                cache.update_code_and_global_deps(tree)
+            try:
+                #pdb.set_trace()
+                if memo_args: # Include function arguments in cache key
+                    return cache.lookup(*args, **kwargs)
+                else: # Exclude them
+                    return cache.lookup()
+            except KeyError:
+                result = f(*args, **kwargs)
+                if memo_args:
+                    cache.insert(result, *args, **kwargs)
+                else:
+                    cache.insert(result)
+                return result
 
-        try:
-            return cache.lookup(*args, **kwargs)
-        except KeyError:
-            result = f(*args, **kwargs)
-            cache.insert(result, *args, **kwargs)
-            return result
+        def identity(*args, **kwargs):
+            return f(*args, **kwargs)
 
-    return new_f
+        if (not memo_args and not memo_vars and not memo_code):
+            return identity
+        else:
+            return new_f
+    return memoizer
+
+# Default memoization wrapper
+memoize_all = memoizer(memo_args = True, memo_vars = True, memo_code = True)
 
 def eval_node(node, context = {}):
     expr = ast.Expression(node)
