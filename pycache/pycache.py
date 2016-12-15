@@ -191,19 +191,28 @@ def serialize(obj):
     Try fast (but limited) serialization on non-callable objects.
     If it fails, try pickle and then finally dill.
     """
+#    if len(str(obj)) == 1:
+#        pdb.set_trace()
     if callable(obj):
-        return dill.dumps(obj)
+        result = dill.dumps(obj)
+        #print(len(result))
+        print(obj)
+#        print(result)
+        return result
+        #return dill.dumps(obj)
     try:
         result = ujson.dumps(obj)
-        if len(result) == 514:
-            print(obj)
+        #print(len(result))
+        #print(obj)
+        print(result)
         return result
         #return ujson.dumps(obj)
     except:
         try:
             result = pickle.dumps(obj)
-            if len(result) == 514:
-                print(obj)
+            #print(len(result))
+            print(obj)
+            #print(result)
             return result
             #return pickle.dumps(obj)
         except:
@@ -417,7 +426,7 @@ def memoizer(memo_args = True, memo_vars = True, memo_code = True, custom_cache 
         def identity(*args, **kwargs):
             return f(*args, **kwargs)
 
-        if (not memo_args and not memo_vars and not memo_code and not custom_cache):
+        if (not memo_args and not memo_vars and not memo_code and custom_cache == '[]'):
             return identity
         else:
             return new_f
