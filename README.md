@@ -106,7 +106,8 @@ def ratio(i, j, k, l):
     #return  6 - (i + j - N - M)
 
 
-@pycache.memoizer(memo_args = False, memo_vars = False, memo_code = False, custom_cache = "[system[N - 2 : N + 3, M - 2 : M + 3]]")
+@pycache.memoizer(memo_args = False, memo_vars = False, memo_code = False,
+	custom_cache = "[system[N - 2 : N + 3, M - 2 : M + 3]]")
 def energy(system = [], N = 0, M = 0):
     ret = -1 * system[N,M]
     tmp = 0
