@@ -230,7 +230,7 @@ def hash_obj(obj):
                 return obj_digest(dill.dumps(obj))
         else:
             return obj_digest(obj)
-    
+
 
 def wrap_call(call_node, wrapper):
     import copy
@@ -371,7 +371,7 @@ class MemoStack:
 def get_globals():
     return globals()
 
-def memoizer(memo_args = True, memo_vars = True, memo_code = True):
+def memoizer(memo_args = True, memo_vars = True, memo_code = True, custom_cache = ""):
     """
     Generate a memoizing decorator that takes into account zero or more of (1)
     function arguments, (2) local and global variables, and (3) code
@@ -382,6 +382,10 @@ def memoizer(memo_args = True, memo_vars = True, memo_code = True):
         state = {'memocache': None}
         def new_f(*args, **kwargs):
             cache = state['memocache']
+            loc = locals()
+            loc.update(kwargs)
+            custom_cache = eval(custom_cache, globals(), loc)
+
             # TODO: parse the tree in parent scope to avoid wasteful repeated
             # computation
             tree = ast.Module(body = decode_ast(new_f._source).body)
@@ -393,15 +397,17 @@ def memoizer(memo_args = True, memo_vars = True, memo_code = True):
                 cache.update_code_and_global_deps(tree)
             try:
                 if memo_args: # Include function arguments in cache key
+                    args = list(args) + custom_cache
                     return cache.lookup(*args, **kwargs)
                 else: # Exclude them
-                    return cache.lookup()
+                    return cache.lookup(custom_cache)
             except KeyError:
                 result = f(*args, **kwargs)
                 if memo_args:
+                    args = list(args) + custom_cache
                     cache.insert(result, *args, **kwargs)
                 else:
-                    cache.insert(result)
+                    cache.insert(result, custom_cache)
                 return result
 
         def identity(*args, **kwargs):
