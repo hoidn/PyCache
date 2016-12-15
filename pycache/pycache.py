@@ -1,3 +1,6 @@
+import operator
+from functools import reduce
+import numpy as np
 import xxhash
 import pickle
 import dill
@@ -191,10 +194,18 @@ def serialize(obj):
     if callable(obj):
         return dill.dumps(obj)
     try:
-        return ujson.dumps(obj)
+        result = ujson.dumps(obj)
+        if len(result) == 514:
+            print(obj)
+        return result
+        #return ujson.dumps(obj)
     except:
         try:
-            return pickle.dumps(obj)
+            result = pickle.dumps(obj)
+            if len(result) == 514:
+                print(obj)
+            return result
+            #return pickle.dumps(obj)
         except:
             return dill.dumps(obj)
 
@@ -205,9 +216,6 @@ def hash_obj(obj):
     u"""
     return a hash of any python object
     """
-    import operator
-    from functools import reduce
-    import numpy as np
 
     def iter_digest(to_digest):
         return obj_digest(reduce(operator.add, list(map(hash_obj, to_digest))))

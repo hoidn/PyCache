@@ -1,6 +1,6 @@
 import numpy as np
 SIZE = 100
-STEPS = 100
+STEPS = 10
 #----------------------------------------------------------------------#
 #   Check periodic boundary conditions
 #----------------------------------------------------------------------#
@@ -16,7 +16,7 @@ def bc(i):
 #   Calculate internal energy
 #----------------------------------------------------------------------#
 
-@pycache.memoizer()
+#@pycache.memoizer()
 def ratio(i, j, N, M):
     return  6 - (i + j - N - M)
 
