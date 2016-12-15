@@ -25,8 +25,12 @@ def double(f):
 a = list(range(10))
 @pycache.memoizer(custom_cache = "[a[x1: x2]]")
 def test_customcache(a = a, x1 = 1, x2 = 2):
-    print(a)
     time.sleep(1)
+
+def kwtest(a = 1, **kwargs):
+    return a
+
+
     
 
 def test_wrap_double():

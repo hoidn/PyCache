@@ -369,7 +369,7 @@ def memoizer(memo_args = True, memo_vars = True, memo_code = True, custom_cache 
     function arguments, (2) local and global variables, and (3) code
     dependencies.  If none of these is selected, no memoization is done.
     """
-    def memoizer(f):
+    def inner_memoizer(f):
         """ Main memoization wrapper"""
         state = {'memocache': None}
         print(memo_code)
@@ -390,8 +390,8 @@ def memoizer(memo_args = True, memo_vars = True, memo_code = True, custom_cache 
                 cache.update_code_and_global_deps(tree)
             try:
                 if memo_args: # Include function arguments in cache key
-                    args = list(args) + cc
-                    return cache.lookup(*args, **kwargs)
+                    new_args = list(args) + cc
+                    return cache.lookup(*new_args, **kwargs)
                 else: # Exclude them
                     return cache.lookup(cc)
             except KeyError:
@@ -410,7 +410,7 @@ def memoizer(memo_args = True, memo_vars = True, memo_code = True, custom_cache 
             return identity
         else:
             return new_f
-    return memoizer
+    return inner_memoizer
 
 # Default memoization wrapper
 memoize_all = memoizer(memo_args = True, memo_vars = True, memo_code = True, custom_cache = '[]')
