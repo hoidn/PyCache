@@ -1,3 +1,4 @@
+import time
 import pdb
 import ast
 import pycache
@@ -20,6 +21,13 @@ def double(f):
     def new_f(*args, **kwargs):
         return 2 * f(*args, **kwargs)
     return new_f
+
+a = list(range(10))
+@pycache.memoizer(custom_cache = "[a[x1: x2]]")
+def test_customcache(a = a, x1 = 1, x2 = 2):
+    print(a)
+    time.sleep(1)
+    
 
 def test_wrap_double():
     #pdb.set_trace()

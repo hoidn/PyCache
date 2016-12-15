@@ -280,15 +280,7 @@ class WrapModule(ast.NodeVisitor):
                 # Rebind the function to its wrapped version if the user hasn't explicitly
                 # annotated it.
                 if not search_decorator_list(bnode):
-                    new_body.append(
-                        ast.fix_missing_locations(
-                            ast.Assign(targets=[ast.Name(id = bnode.name, ctx = ast.Store())],
-                                   value = ast.Call(
-                                       func = ast.parse(self.wrapper).body[0].value,
-                                       args = [ast.Name(id = bnode.name, ctx = ast.Load())],
-                                       keywords = []
-                                   ))))
-                # TODO cleanup
+                    bnode.decorator_list.insert(0, ast.parse(self.wrapper).body[0].value)
                 new_body.append(
                     ast.fix_missing_locations(
                         ast.Assign(targets=[ast.Attribute(value = ast.Name(id = bnode.name, ctx = ast.Load()),
@@ -371,7 +363,7 @@ class MemoStack:
 def get_globals():
     return globals()
 
-def memoizer(memo_args = True, memo_vars = True, memo_code = True, custom_cache = ""):
+def memoizer(memo_args = True, memo_vars = True, memo_code = True, custom_cache = '[]'):
     """
     Generate a memoizing decorator that takes into account zero or more of (1)
     function arguments, (2) local and global variables, and (3) code
@@ -380,11 +372,12 @@ def memoizer(memo_args = True, memo_vars = True, memo_code = True, custom_cache 
     def memoizer(f):
         """ Main memoization wrapper"""
         state = {'memocache': None}
+        print(memo_code)
         def new_f(*args, **kwargs):
             cache = state['memocache']
             loc = locals()
             loc.update(kwargs)
-            custom_cache = eval(custom_cache, globals(), loc)
+            cc = eval(custom_cache, globals(), loc)
 
             # TODO: parse the tree in parent scope to avoid wasteful repeated
             # computation
@@ -397,17 +390,17 @@ def memoizer(memo_args = True, memo_vars = True, memo_code = True, custom_cache 
                 cache.update_code_and_global_deps(tree)
             try:
                 if memo_args: # Include function arguments in cache key
-                    args = list(args) + custom_cache
+                    args = list(args) + cc
                     return cache.lookup(*args, **kwargs)
                 else: # Exclude them
-                    return cache.lookup(custom_cache)
+                    return cache.lookup(cc)
             except KeyError:
                 result = f(*args, **kwargs)
                 if memo_args:
-                    args = list(args) + custom_cache
+                    args = list(args) + cc
                     cache.insert(result, *args, **kwargs)
                 else:
-                    cache.insert(result, custom_cache)
+                    cache.insert(result, cc)
                 return result
 
         def identity(*args, **kwargs):
@@ -420,7 +413,7 @@ def memoizer(memo_args = True, memo_vars = True, memo_code = True, custom_cache 
     return memoizer
 
 # Default memoization wrapper
-memoize_all = memoizer(memo_args = True, memo_vars = True, memo_code = True)
+memoize_all = memoizer(memo_args = True, memo_vars = True, memo_code = True, custom_cache = '[]')
 
 def eval_node(node, context = {}):
     expr = ast.Expression(node)
