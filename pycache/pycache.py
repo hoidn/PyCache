@@ -12,7 +12,7 @@ import logging
 logging.basicConfig(filename = 'pycache.log', level = logging.DEBUG)
 
 # Can equal 'performance' or 'correctness'
-caching_strategy = 'correctness'
+caching_strategy = 'performance'
 
 
 class MemoCache:
@@ -371,8 +371,9 @@ def memoizer(memo_args = True, memo_vars = True, memo_code = True, custom_cache 
     """
     def inner_memoizer(f):
         """ Main memoization wrapper"""
-        state = {'memocache': None}
+        state = {'memocache': None, 'tree': None}
         print(memo_code)
+
         def new_f(*args, **kwargs):
             cache = state['memocache']
             loc = locals()
@@ -381,13 +382,15 @@ def memoizer(memo_args = True, memo_vars = True, memo_code = True, custom_cache 
 
             # TODO: parse the tree in parent scope to avoid wasteful repeated
             # computation
-            tree = ast.Module(body = decode_ast(new_f._source).body)
+            if state['tree'] == None:
+                state['tree'] = ast.Module(body = decode_ast(new_f._source).body)
+
             if cache is None:
                 global_env = f.__globals__
-                cache = state['memocache'] = MemoCache(tree, global_env = global_env,
+                cache = state['memocache'] = MemoCache(state['tree'], global_env = global_env,
                                                        vars = memo_vars, code = memo_code)
             elif caching_strategy == 'correctness':
-                cache.update_code_and_global_deps(tree)
+                cache.update_code_and_global_deps(state['tree'])
             try:
                 if memo_args: # Include function arguments in cache key
                     new_args = list(args) + cc
@@ -406,7 +409,7 @@ def memoizer(memo_args = True, memo_vars = True, memo_code = True, custom_cache 
         def identity(*args, **kwargs):
             return f(*args, **kwargs)
 
-        if (not memo_args and not memo_vars and not memo_code):
+        if (not memo_args and not memo_vars and not memo_code and not custom_cache):
             return identity
         else:
             return new_f
