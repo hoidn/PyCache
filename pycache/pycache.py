@@ -15,7 +15,7 @@ import logging
 logging.basicConfig(filename = 'pycache.log', level = logging.DEBUG)
 
 # Can equal 'performance' or 'correctness'
-caching_strategy = 'performance'
+caching_strategy = 'correctness'
 
 
 class MemoCache:
@@ -32,7 +32,8 @@ class MemoCache:
             deps = DependencyWalk(global_env = global_env)
             deps.visit(callnode)
             # TODO: insert code here that loads the persistent cache from disk
-            self.code_hash = hash_obj(deps.code_hashes)
+            self.code_hash = obj_digest(deps.code_hashes)
+            #self.code_hash = hash_obj(deps.code_hashes)
             self.global_deps = deps.globals
         # TODO: add a mechanism for including and updating file dependencies
         # self.file_deps = []
@@ -43,7 +44,7 @@ class MemoCache:
             deps.visit(callnode)
             # TODO: why does this code hash change over repeated calls with the same arguments?
             #print(self.code_hash)
-            new_code_hash = hash_obj(deps.code_hashes)
+            new_code_hash = obj_digest(deps.code_hashes)
             new_global_deps = deps.globals
             # TODO: this will fail if there's a discrepancy between the module prefixes between
             # new_global_deps and self.global_deps
@@ -53,12 +54,12 @@ class MemoCache:
                 self.global_deps = new_global_deps
 
     def _get_key(self, *args, **kwargs):
-        arghash = hash_obj((args, kwargs))
+        arghash = obj_digest((args, kwargs))
         if self.vars:
-            varhash = hash_obj([var for var in self.global_deps])
-            return hash_obj(arghash + varhash)
+            varhash = obj_digest([var for var in self.global_deps])
+            return obj_digest(arghash + varhash)
         else:
-            return hash_obj(arghash)
+            return obj_digest(arghash)
 
     def lookup(self, *args, **kwargs):
         return self.cache[self._get_key(*args, **kwargs)]
@@ -119,7 +120,7 @@ class DependencyWalk(ast.NodeVisitor):
 
     def visit_FunctionDef(self, node):
         name = node.name
-        hash = hash_obj(self.lookup_obj([name]))
+        hash = obj_digest(self.lookup_obj([name]))
         # To avoid infinite recursion, make sure we haven't already seen this
         # function
         if hash not in self.code_hashes:
@@ -185,38 +186,18 @@ def test_eval_attribute():
     node = ast.parse('other.third.bazbar').body[0].value
     assert attribute_path(node) == ['other', 'third', 'bazbar']
 
-
+count = {'c': 0}
 def serialize(obj):
     """
     Try fast (but limited) serialization on non-callable objects.
     If it fails, try pickle and then finally dill.
     """
-#    if len(str(obj)) == 1:
-#        pdb.set_trace()
     if callable(obj):
-        result = dill.dumps(obj)
-        #print(len(result))
-        print(obj)
-#        print(result)
-        return result
-        #return dill.dumps(obj)
+        return dill.dumps(obj)
     try:
-        result = ujson.dumps(obj)
-        #print(len(result))
-        #print(obj)
-        print(result)
-        return result
-        #return ujson.dumps(obj)
+        return pickle.dumps(obj)
     except:
-        try:
-            result = pickle.dumps(obj)
-            #print(len(result))
-            print(obj)
-            #print(result)
-            return result
-            #return pickle.dumps(obj)
-        except:
-            return dill.dumps(obj)
+        return dill.dumps(obj)
 
 def obj_digest(to_digest):
     return xxhash.xxh64(serialize(to_digest)).hexdigest()
@@ -389,7 +370,6 @@ def memoizer(memo_args = True, memo_vars = True, memo_code = True, custom_cache 
     def inner_memoizer(f):
         """ Main memoization wrapper"""
         state = {'memocache': None, 'tree': None}
-        print(memo_code)
 
         def new_f(*args, **kwargs):
             cache = state['memocache']
