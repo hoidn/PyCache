@@ -31,6 +31,7 @@ This should run near-instantaneously, while the non-memoized version would never
 By default, pycache resolves a function's code dependencies at runtime and invalidates its cache when it detects source code changes. This can be seen by the following example:
 ```python
 # tests/tests.py
+@pycache.memoizer(memo_args = True, memo_vars = False, memo_code = True)
 def foo(x):
 	return bar(x)
 
