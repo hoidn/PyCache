@@ -1,3 +1,4 @@
+import matplotlib.pyplot as plt
 import operator
 from functools import reduce
 import numpy as np
@@ -147,16 +148,6 @@ def simplememo(f):
         return cache[args]
     return new_f
 
-#def simplehashmemo(f):
-#    """Basic memoization that uses object hash-based keys"""
-#    cache = {}
-#    def new_f(*args):
-#        if args not in cache:
-#            cache[hash_obj(args)] = f(*args)
-#        return cache[hash_obj(args)]
-#    return new_f
-
-
 def encode_ast(tree):
     return dill.dumps(tree).decode('cp437')
 
@@ -242,13 +233,6 @@ def wrap_call(call_node, wrapper):
     call_node.func = ast.fix_missing_locations(subtree)
     return call_node
 
-#def pop_from_decorator_list(defnode, search_str):
-#    """
-#    Search a function definition node for a decorator whose name matches the
-#    given string. If a match is found, the corresponding node is removed from
-#    the decorator list and returned.
-#    """
-
 def search_decorator_list(defnode):
     """
     Return true if at least one of a FunctionDef node's decorators is a
@@ -261,8 +245,6 @@ def search_decorator_list(defnode):
                 return True
     return False
 
-#def parse_functiondef(defnode):
-#    decorator_list=[Call(func=Name(id='wr'), args=[Str(s='hello'), Str(s='world')], keywords=[])]
 class WrapModule(ast.NodeVisitor):
     """
     Modify AST by "wrapping" function definitions.
@@ -296,52 +278,6 @@ class WrapModule(ast.NodeVisitor):
     def visit_FunctionDef(self, node):
         return self.visit_Module_or_FunctionDef(node)
 
-#def pop_from_decorator_list(defnode):
-#    """
-#    Search a function definition node for a decorator whose name matches the
-#    given string. If a match is found, the corresponding node is removed from
-#    the decorator list and returned.
-#    """
-#    for node in defnode.decorator_list:
-#        if type(node) == ast.Call:
-#            if 'pycache' in node.func.id:
-#                defnode.decorator_list.remove(node)
-#                print(astor.dump(node))
-#                return node
-#    return None
-#    def visit_Module_or_FunctionDef(self, node):
-#        new_body = []
-#        for i, bnode in enumerate(node.body):
-#            new_body.append(bnode)
-#            if type(bnode) == ast.FunctionDef:
-#                # Rebind the function to its wrapped version if the user hasn't explicitly
-#                # annotated it.
-#                print(astor.dump(bnode))
-#                decorator = pop_from_decorator_list(bnode)
-#                if decorator is None:
-#                    new_body.append(
-#                        ast.fix_missing_locations(
-#                            ast.Assign(targets=[ast.Name(id = bnode.name, ctx = ast.Store())],
-#                                   value = ast.Call(
-#                                       func = ast.parse(self.wrapper).body[0].value,
-#                                       args = [ast.Name(id = bnode.name, ctx = ast.Load())],
-#                                       keywords = []
-#                                   ))))
-#                else:
-#                    new_body.append(
-#                        ast.fix_missing_locations(
-#                            ast.Assign(targets=[ast.Name(id = bnode.name, ctx = ast.Store())],
-#                                   value = ast.Call(
-#                                       func = decorator,
-#                                       #func = ast.parse(self.wrapper).body[0].value,
-#                                       args = [ast.Name(id = bnode.name, ctx = ast.Load())],
-#                                       keywords = []
-#                                   ))))
-#                new_body.append(
-#                    ast.fix_missing_locations(
-#                        ast.Assign(targets=[ast.Attribute(value = ast.Name(id = bnode.name, ctx = ast.Load()),
-#                                                          attr = '_source', ctx = ast.Store())],
-#                                   value = ast.Str(s = encode_ast(bnode)))))
 
 class MemoStack:
     def __init__(self):

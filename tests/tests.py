@@ -8,14 +8,6 @@ import time
 ms = pycache.pycache.MemoStack()
 import other
 
-def foo(x):
-    return bar(x)
-
-def bar(z):
-    return 2 * z
-
-def bar2(z):
-    return 3 * z
 
 def double(f):
     def new_f(*args, **kwargs):
@@ -29,9 +21,6 @@ def test_customcache(a = a, x1 = 1, x2 = 2):
 
 def kwtest(a = 1, **kwargs):
     return a
-
-
-    
 
 def test_wrap_double():
     #pdb.set_trace()
@@ -79,17 +68,35 @@ def test_simplememo():
 #        return new
 #    return wrapper
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Demo example 1:
+@pycache.memoizer(memo_args = True, memo_vars = False, memo_code = False)
 def fib(n):
     if n <= 1:
         return 1
     return fib(n - 1) + fib(n - 2)
 
-@pycache.memoizer(memo_args = True, memo_vars = False, memo_code = False)
-def fib2(n):
-    if n <= 1:
-        return 1
-    return fib2(n - 1) + fib2(n - 2)
+# Demo example 2:
+def foo(x):
+    return bar(x)
 
-#@wr('hello', 'world')
-#def wtest(x):
-#    return x
+def bar(z):
+    return 2 * z
+
+def bar2(z):
+    return 3 * z
