@@ -1,10 +1,10 @@
 import numpy as np
-SIZE = 10
-STEPS = 100
+SIZE = 100
+STEPS = 100000
 #----------------------------------------------------------------------#
 #   Check periodic boundary conditions
 #----------------------------------------------------------------------#
-@pycache.memoizer(memo_args = False, memo_vars = False, memo_code = False)
+# @pycache.memoizer(memo_args = False, memo_vars = False, memo_code = False)
 def bc(i):
     if i+1 > SIZE-1:
         return 0
@@ -17,12 +17,12 @@ def bc(i):
 #   Calculate internal energy
 #----------------------------------------------------------------------#
 
-@pycache.memoizer(memo_args = False, memo_vars = False, memo_code = False)
+# @pycache.memoizer(memo_args = False, memo_vars = False, memo_code = False)
 def ratio(i, j, N, M):
     return  6 - (i + j - N - M)
 
 
-@pycache.memoizer(memo_args = False, memo_vars = False, memo_code = False, custom_cache = "[system[N - 2 : N + 3, M - 2 : M + 3]]")
+# @pycache.memoizer(memo_args = False, memo_vars = False, memo_code = False, custom_cache = "[system[N - 2 : N + 3, M - 2 : M + 3]]")
 def energy(system = [], N = 0, M = 0):
     ret = -1 * system[N,M]
     tmp = 0
@@ -46,7 +46,7 @@ def energy(system = [], N = 0, M = 0):
 #----------------------------------------------------------------------#
 #   Build the system
 #----------------------------------------------------------------------#
-@pycache.memoizer(memo_args = False, memo_vars = False, memo_code = False)
+# @pycache.memoizer(memo_args = False, memo_vars = False, memo_code = False)
 def build_system():
     system = np.random.random_integers(0,1,(SIZE,SIZE))
     system[system==0] =- 1
@@ -56,7 +56,7 @@ def build_system():
 #----------------------------------------------------------------------#
 #   The Main monte carlo loop
 #----------------------------------------------------------------------#
-@pycache.memoizer(memo_args = False, memo_vars = False, memo_code = False)
+# @pycache.memoizer(memo_args = False, memo_vars = False, memo_code = False)
 def main(T):
     system = build_system()
 
@@ -75,7 +75,7 @@ def main(T):
 #----------------------------------------------------------------------#
 #   Run the menu for the monte carlo simulation
 #----------------------------------------------------------------------#
-@pycache.memoizer(memo_args = False, memo_vars = False, memo_code = False)
+# @pycache.memoizer(memo_args = False, memo_vars = False, memo_code = False)
 def run():
     print ('='*70)
     print ('\tMonte Carlo Statistics for an ising model with')
