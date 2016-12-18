@@ -1,4 +1,4 @@
-PyCache is an annotation language for memoization of functions in Python. Its main features are that it automatically resolve function dependencies (which, in addition to explicit arguments, may include global variables, source code, and data on disk) and automatically clear a function’s memoization cache when its code (or, transitively, that of any helper functions) changes.
+PyCache is an annotation language for memoization of functions in Python. Its main features are that it automatically resolves function dependencies (which, in addition to explicit arguments, may include global variables, source code, and data on disk) and automatically clears a function’s memoization cache when its code (or, transitively, that of any helper functions) changes.
 
 
 ## Tutorial
