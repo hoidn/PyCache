@@ -10,7 +10,7 @@ def fib(n):
 		return 1
 	return fib(n - 1) + fib(n - 2)
 ```
-It will run in exponential time, but we can use pycache to automatically transform it into a memoized, linear time version. From the REPL, or in a module:
+It will run in exponential time, but we can use PyCache to automatically transform it into a memoized, linear time version. From the REPL:
 ```python
 >>> import pycache
 >>> from tests import fib
