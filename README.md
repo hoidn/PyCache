@@ -44,7 +44,7 @@ Again from the shell:
 ```
 We see that the output of foo() correctly changes when tests.bar is rebound to the same function as tests.bar2. 
 
-Finally, pycache calculates cache keys using the values of both function parameters and of the global and local variables accessed in a function's body. TODO add an example demonstrating this once we've merged that feature.
+Finally, pycache calculates cache keys using the values of both function parameters and of the global and local variables accessed in a function's body.
 
 Variable lookup and code-based cache invalidation are necessary to obtain correct behavior in the general case of functions that may access shared state and can be dynamically altered at runtime. However, they introduce substantial overhead that can in some cases negate the benefit of memoization. For this reason the user can selectively disable features by decorating functions. For instance, we could use the knowledge that fib is (1) mutation-free and (2) that it calls no functions other than itself to disable code and variable checks:
 ```python
